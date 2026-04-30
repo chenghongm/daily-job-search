@@ -1,0 +1,41 @@
+{
+  "title": "Full-Stack Developer with AI Applied Mindset",
+  "years_experience": 5,
+  "location": "San Francisco Bay Area",
+  "work_preference": ["bay area", "remote"],
+  "relocation": false,
+  "core_skills": {
+    "languages": ["JavaScript", "PHP", "Python", "Java", "HTML", "CSS"],
+    "frontend": ["React", "Vue"],
+    "backend": ["Laravel", "RESTful APIs"],
+    "database": ["MySQL"],
+    "devops": ["AWS", "Docker", "Git", "GitHub"],
+    "ai_ml": ["LLM integration", "AI Agent", "Prompt Engineering", "Local LLM fine-tuning", "MLX", "Llama-3"],
+    "tools": ["Notion", "Terminal", "Chrome Extension development"]
+  },
+  "highlights": [
+    "6200+ GitHub contributions",
+    "Built AI Assistant Layer managing full LLM workflow (33% time saving)",
+    "Local LLM fine-tuning pipeline on Apple Silicon (MLX)",
+    "Chrome Extension for multi-platform AI chat UI",
+    "Scheduling, workflow, and compliance systems at scale"
+  ],
+  "education": "Master in Computer Science",
+  "gradient_targets": {
+    "safe_80": {
+      "description": "Full Stack Developer at mid-size company, Laravel/React stack",
+      "keywords": ["full stack developer", "react developer", "laravel developer", "php developer"],
+      "seniority": ["mid", "senior"]
+    },
+    "stretch_60": {
+      "description": "Senior Full Stack or AI-augmented product roles",
+      "keywords": ["senior full stack", "AI engineer", "LLM engineer", "full stack AI"],
+      "seniority": ["senior", "staff"]
+    },
+    "reach_40": {
+      "description": "Staff Engineer or AI Infrastructure roles",
+      "keywords": ["staff engineer", "AI platform engineer", "ML engineer", "AI infrastructure"],
+      "seniority": ["staff", "principal", "lead"]
+    }
+  }
+}
