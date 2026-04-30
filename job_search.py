@@ -5,6 +5,7 @@ Daily Job Search Agent
 - Scores and categorizes using Claude API
 - Writes results to Google Sheets
 - Marks completion on Google Calendar
+
 """
 
 import os
