@@ -362,6 +362,7 @@ def mark_calendar(jobs: list):
 
     # Use explicit calendar email to ensure writing to correct calendar
     calendar_id = os.environ.get("CALENDAR_ID", "primary")
+    print(f"📅 Using calendar: {os.environ.get('CALENDAR_ID', 'NOT SET')}")
     result = service.events().insert(calendarId=calendar_id, body=event).execute()
     print(f"✅ Calendar event created: {result.get('htmlLink')}")
 
