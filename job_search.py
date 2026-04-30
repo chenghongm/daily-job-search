@@ -267,8 +267,13 @@ def score_batch_claude(jobs: list) -> list:
 # ── Scoring: Gemini ────────────────────────────────────────────
 def score_batch_gemini(jobs: list) -> list:
     prompt = build_prompt(jobs)
-    url    = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
+
+    url    = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={GEMINI_KEY}"
     body   = {"contents": [{"parts": [{"text": prompt}]}]}
+    resp   = requests.post(url, json=body, timeout=30)
+    if not resp.ok:
+        print(f"Gemini error: {resp.status_code} {resp.text}")
+        resp.raise_for_status()
     resp   = requests.post(url, json=body, timeout=30)
     resp.raise_for_status()
     text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
