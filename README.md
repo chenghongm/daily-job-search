@@ -60,7 +60,7 @@ daily-job-search/
 
 ### 5. GitHub Secrets 配置
 
-进入你的 repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
+进入repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
 
 逐一添加以下 7 个：
 
@@ -68,10 +68,10 @@ daily-job-search/
 |-------------|-----|
 | `ADZUNA_APP_ID` | Adzuna 的 App ID |
 | `ADZUNA_APP_KEY` | Adzuna 的 App Key |
-| `ANTHROPIC_API_KEY` | 你的 Anthropic API Key |
+| `ANTHROPIC_API_KEY` | Anthropic API Key |
 | `SPREADSHEET_ID` | Google Sheet 的 ID |
 | `RESEND_API_KEY` | Resend 的 API Key |
-| `NOTIFY_EMAIL` | 你想接收邮件的地址 |
+| `NOTIFY_EMAIL` | 想接收邮件的地址 |
 | `GOOGLE_CREDENTIALS` | Service Account JSON 文件的**完整内容**（整个粘贴进去） |
 
 ---
