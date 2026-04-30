@@ -5,7 +5,6 @@ Daily Job Search Agent
 - Scores and categorizes using Claude API
 - Writes results to Google Sheets
 - Marks completion on Google Calendar
-
 """
 
 import os
@@ -54,7 +53,7 @@ def fetch_jobs_for_query(query: dict) -> list:
         "where":            "San Francisco Bay Area",
         "distance":         50,
         "sort_by":          "date",
-        "max_days_old":     2,
+        "max_days_old":     14,
         "content-type":     "application/json",
     }
     try:
@@ -77,7 +76,7 @@ def fetch_remote_jobs(query: dict) -> list:
         "results_per_page": 3,
         "what":             query["what"] + " remote",
         "sort_by":          "date",
-        "max_days_old":     2,
+        "max_days_old":     14,
         "content-type":     "application/json",
     }
     try:
