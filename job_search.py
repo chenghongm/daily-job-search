@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """
 Daily Job Search Agent
-- Fetches jobs from Adzuna API
-- Scores and categorizes using Claude API
+- Fetches jobs from Adzuna API + Greenhouse + Lever
+- Scores and categorizes using AI (Claude / Gemini / GPT-4o, switchable)
 - Writes results to Google Sheets
 - Marks completion on Google Calendar
+
+Set SCORING_MODEL in GitHub Secrets to switch:
+  "claude"  → claude-sonnet-4-6      (default)
+  "gemini"  → gemini-1.5-flash
+  "gpt"     → gpt-4o
 """
 
 import os
@@ -21,10 +26,12 @@ from googleapiclient.discovery import build
 # ── Config ─────────────────────────────────────────────────────
 ADZUNA_APP_ID   = os.environ["ADZUNA_APP_ID"]
 ADZUNA_APP_KEY  = os.environ["ADZUNA_APP_KEY"]
-ANTHROPIC_KEY   = os.environ["ANTHROPIC_API_KEY"]
+ANTHROPIC_KEY   = os.environ.get("ANTHROPIC_API_KEY", "")
+GEMINI_KEY      = os.environ.get("GEMINI_API_KEY", "")
+OPENAI_KEY      = os.environ.get("OPENAI_API_KEY", "")
 SPREADSHEET_ID  = os.environ["SPREADSHEET_ID"]
-
-GOOGLE_CREDS    = os.environ["GOOGLE_CREDENTIALS"]    # full JSON string
+GOOGLE_CREDS    = os.environ["GOOGLE_CREDENTIALS"]
+SCORING_MODEL   = os.environ.get("SCORING_MODEL", "claude").lower()  # claude | gemini | gpt
 
 RESUME_PROFILE  = json.load(open("resume_profile.json"))
 TODAY           = datetime.date.today().isoformat()
@@ -198,9 +205,8 @@ def fetch_lever_jobs() -> list:
     return jobs
 
 
-# ── Claude Scoring ─────────────────────────────────────────────
-def score_batch(client, jobs: list) -> list:
-    """Score a single batch of jobs with Claude."""
+# ── Scoring: build prompt ──────────────────────────────────────
+def build_prompt(jobs: list) -> str:
     job_list_text = "\n\n".join([
         f"[{i+1}] Title: {j.get('title','')}\n"
         f"    Company: {j.get('company',{}).get('display_name','')}\n"
@@ -210,10 +216,8 @@ def score_batch(client, jobs: list) -> list:
         f"    Description: {j.get('description','')[:400]}"
         for i, j in enumerate(jobs)
     ])
-
     profile_summary = json.dumps(RESUME_PROFILE["core_skills"], ensure_ascii=False)
-
-    prompt = f"""You are a job matching assistant. Evaluate each job against this candidate profile.
+    return f"""You are a job matching assistant. Evaluate each job against this candidate profile.
 
 CANDIDATE PROFILE:
 - 5+ years Full Stack Developer (React, Laravel/PHP, MySQL, AWS, Docker)
@@ -238,29 +242,84 @@ For each job return a JSON array. Each element:
 
 Return ONLY the JSON array, no markdown, no explanation."""
 
+
+def parse_json_response(text: str) -> list:
+    try:
+        clean = text.strip().replace("```json", "").replace("```", "").strip()
+        return json.loads(clean)
+    except Exception as e:
+        print(f"JSON parse error: {e}")
+        return []
+
+
+# ── Scoring: Claude ────────────────────────────────────────────
+def score_batch_claude(jobs: list) -> list:
+    client   = Anthropic(api_key=ANTHROPIC_KEY)
+    prompt   = build_prompt(jobs)
     response = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=2000,
         messages=[{"role": "user", "content": prompt}]
     )
-
-    try:
-        return json.loads(response.content[0].text)
-    except Exception as e:
-        print(f"Claude parse error: {e}")
-        return []
+    return parse_json_response(response.content[0].text)
 
 
-def score_jobs_with_claude(jobs: list) -> list:
-    client   = Anthropic(api_key=ANTHROPIC_KEY)
-    scored   = []
+# ── Scoring: Gemini ────────────────────────────────────────────
+def score_batch_gemini(jobs: list) -> list:
+    prompt = build_prompt(jobs)
+    url    = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_KEY}"
+    body   = {"contents": [{"parts": [{"text": prompt}]}]}
+    resp   = requests.post(url, json=body, timeout=30)
+    resp.raise_for_status()
+    text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+    return parse_json_response(text)
+
+
+# ── Scoring: GPT-4o ────────────────────────────────────────────
+def score_batch_gpt(jobs: list) -> list:
+    prompt  = build_prompt(jobs)
+    headers = {"Authorization": f"Bearer {OPENAI_KEY}", "Content-Type": "application/json"}
+    body    = {
+        "model": "gpt-4o",
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 2000,
+    }
+    resp = requests.post("https://api.openai.com/v1/chat/completions", json=body, headers=headers, timeout=30)
+    resp.raise_for_status()
+    text = resp.json()["choices"][0]["message"]["content"]
+    return parse_json_response(text)
+
+
+# ── Scoring: dispatcher ────────────────────────────────────────
+def score_batch(jobs: list) -> list:
+    print(f"   🤖 Scoring with: {SCORING_MODEL}")
+    if SCORING_MODEL == "gemini":
+        return score_batch_gemini(jobs)
+    elif SCORING_MODEL == "gpt":
+        return score_batch_gpt(jobs)
+    else:
+        return score_batch_claude(jobs)
+
+
+
+def score_jobs(jobs: list, model: str) -> list:
+    """Score jobs with a specific model, return top 10."""
+    scored     = []
     batch_size = 15
 
     for i in range(0, len(jobs), batch_size):
-        batch   = jobs[i:i+batch_size]
-        results = score_batch(client, batch)
+        batch_copy = [dict(j) for j in jobs[i:i+batch_size]]
+        print(f"   [{model}] batch {i//batch_size + 1}...")
+
+        if model == "gemini":
+            results = score_batch_gemini(batch_copy)
+        elif model == "gpt":
+            results = score_batch_gpt(batch_copy)
+        else:
+            results = score_batch_claude(batch_copy)
+
         score_map = {s["index"]: s for s in results}
-        for idx, job in enumerate(batch):
+        for idx, job in enumerate(batch_copy):
             s = score_map.get(idx + 1, {})
             job["_match_score"]          = s.get("match_score", 0)
             job["_gradient"]             = s.get("gradient", job.get("_gradient", ""))
@@ -269,7 +328,6 @@ def score_jobs_with_claude(jobs: list) -> list:
             job["_apply_recommendation"] = s.get("apply_recommendation", "")
             scored.append(job)
 
-    # Sort by score desc, pick top 10
     scored.sort(key=lambda x: x["_match_score"], reverse=True)
     return scored[:10]
 
@@ -290,28 +348,25 @@ def get_google_creds():
     return Credentials.from_service_account_info(creds_dict, scopes=scopes)
 
 
-def get_sheet():
-    creds = get_google_creds()
-    gc    = gspread.authorize(creds)
-    sh    = gc.open_by_key(SPREADSHEET_ID)
-
+def get_or_create_tab(sh, tab_name: str):
     try:
-        ws = sh.worksheet("Jobs")
+        ws = sh.worksheet(tab_name)
     except gspread.WorksheetNotFound:
-        ws = sh.add_worksheet(title="Jobs", rows=1000, cols=len(SHEET_HEADERS))
+        ws = sh.add_worksheet(title=tab_name, rows=1000, cols=len(SHEET_HEADERS))
         ws.append_row(SHEET_HEADERS)
-        # Freeze header row
         ws.freeze(rows=1)
-
     return ws
 
 
-def write_jobs_to_sheet(jobs: list):
-    ws = get_sheet()
+def write_jobs_to_tab(jobs: list, tab_name: str):
+    creds = get_google_creds()
+    gc    = gspread.authorize(creds)
+    sh    = gc.open_by_key(SPREADSHEET_ID)
+    ws    = get_or_create_tab(sh, tab_name)
 
     rows = []
     for j in jobs:
-        redirect = j.get("redirect_url", "")
+        redirect  = j.get("redirect_url", "")
         is_remote = "Yes" if j.get("_is_remote") or "remote" in j.get("title","").lower() else ""
         rows.append([
             TODAY,
@@ -331,38 +386,34 @@ def write_jobs_to_sheet(jobs: list):
         ])
 
     ws.append_rows(rows, value_input_option="USER_ENTERED")
-    print(f"✅ Written {len(rows)} jobs to Google Sheets")
-    return rows
+    print(f"✅ [{tab_name}] Written {len(rows)} jobs")
 
 
 # ── Google Calendar ────────────────────────────────────────────
-def mark_calendar(jobs: list):
-    safe    = len([j for j in jobs if "80" in j.get("_gradient", "")])
-    stretch = len([j for j in jobs if "60" in j.get("_gradient", "")])
-    reach   = len([j for j in jobs if "40" in j.get("_gradient", "")])
-
+def mark_calendar(results_by_model: dict):
     sheet_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}"
+    creds     = get_google_creds()
+    service   = build("calendar", "v3", credentials=creds)
 
-    creds   = get_google_creds()
-    service = build("calendar", "v3", credentials=creds)
+    desc_lines = []
+    total = 0
+    for model, jobs in results_by_model.items():
+        safe    = len([j for j in jobs if "80" in j.get("_gradient", "")])
+        stretch = len([j for j in jobs if "60" in j.get("_gradient", "")])
+        reach   = len([j for j in jobs if "40" in j.get("_gradient", "")])
+        total  += len(jobs)
+        desc_lines.append(f"[{model.upper()}] ✅{safe} 🟡{stretch} 🔴{reach}")
 
-    # All-day event for today
     event = {
-        "summary": f"🎯 Job Search: {len(jobs)} jobs found",
-        "description": (
-            f"✅ 80% Safe: {safe}\n"
-            f"🟡 60% Stretch: {stretch}\n"
-            f"🔴 40% Reach: {reach}\n\n"
-            f"View Sheet → {sheet_url}"
-        ),
+        "summary": f"🎯 Job Search: {total} results ({len(results_by_model)} models)",
+        "description": "\n".join(desc_lines) + f"\n\nView Sheet → {sheet_url}",
         "start": {"date": TODAY},
         "end":   {"date": TODAY},
-        "colorId": "2",   # green
+        "colorId": "2",
     }
 
-    # Use explicit calendar email to ensure writing to correct calendar
     calendar_id = os.environ.get("CALENDAR_ID", "primary")
-    print(f"📅 Using calendar: {os.environ.get('CALENDAR_ID', 'NOT SET')}")
+    print(f"📅 Using calendar: {calendar_id}")
     result = service.events().insert(calendarId=calendar_id, body=event).execute()
     print(f"✅ Calendar event created: {result.get('htmlLink')}")
 
@@ -371,7 +422,7 @@ def mark_calendar(jobs: list):
 def main():
     print(f"🔍 Starting daily job search — {TODAY}")
 
-    print("📡 Fetching jobs from Adzuna...")
+    print("📡 Fetching jobs from Adzuna + Greenhouse + Lever...")
     raw_jobs = collect_all_jobs()
     print(f"   Found {len(raw_jobs)} raw listings")
 
@@ -379,17 +430,32 @@ def main():
         print("⚠️  No jobs found today, exiting.")
         return
 
-    print("🤖 Scoring with Claude...")
-    scored_jobs = score_jobs_with_claude(raw_jobs)
-    print(f"   Top {len(scored_jobs)} jobs selected")
+    scoring_model = os.environ.get("SCORING_MODEL", "all").lower()
+    models = ["claude", "gemini", "gpt"] if scoring_model == "all" else [scoring_model]
 
-    print("📊 Writing to Google Sheets...")
-    write_jobs_to_sheet(scored_jobs)
+    results_by_model = {}
+    for model in models:
+        if model == "claude" and not ANTHROPIC_KEY:
+            print(f"⚠️  Skipping claude: ANTHROPIC_API_KEY not set"); continue
+        if model == "gemini" and not GEMINI_KEY:
+            print(f"⚠️  Skipping gemini: GEMINI_API_KEY not set"); continue
+        if model == "gpt" and not OPENAI_KEY:
+            print(f"⚠️  Skipping gpt: OPENAI_API_KEY not set"); continue
 
-    print("📅 Marking Google Calendar...")
-    mark_calendar(scored_jobs)
+        print(f"\n🤖 Scoring with {model.upper()}...")
+        try:
+            scored = score_jobs(raw_jobs, model)
+            print(f"   Top {len(scored)} jobs selected")
+            write_jobs_to_tab(scored, model.capitalize())
+            results_by_model[model] = scored
+        except Exception as e:
+            print(f"❌ {model} failed: {e}")
 
-    print("✅ Done!")
+    if results_by_model:
+        print("\n📅 Marking Google Calendar...")
+        mark_calendar(results_by_model)
+
+    print("\n✅ Done!")
 
 
 if __name__ == "__main__":
