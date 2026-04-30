@@ -145,7 +145,7 @@ For each job return a JSON array. Each element:
 Return ONLY the JSON array, no markdown, no explanation."""
 
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=2000,
         messages=[{"role": "user", "content": prompt}]
     )
@@ -259,8 +259,8 @@ def mark_calendar(jobs: list):
         "colorId": "2",   # green
     }
 
-    service.events().insert(calendarId="primary", body=event).execute()
-    print("✅ Calendar event created")
+    result = service.events().insert(calendarId="primary", body=event).execute()
+    print(f"✅ Calendar event created: {result.get('htmlLink')}")
 
 
 # ── Main ───────────────────────────────────────────────────────
