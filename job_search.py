@@ -4,7 +4,7 @@ Daily Job Search Agent
 - Fetches jobs from Adzuna API
 - Scores and categorizes using Claude API
 - Writes results to Google Sheets
-- Sends summary email via Resend
+- Marks completion on Google Calendar
 """
 
 import os
@@ -13,17 +13,17 @@ import datetime
 import requests
 from anthropic import Anthropic
 
-# ── Google Sheets ──────────────────────────────────────────────
+# ── Google Sheets + Calendar ───────────────────────────────────
 import gspread
 from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
 
 # ── Config ─────────────────────────────────────────────────────
 ADZUNA_APP_ID   = os.environ["ADZUNA_APP_ID"]
 ADZUNA_APP_KEY  = os.environ["ADZUNA_APP_KEY"]
 ANTHROPIC_KEY   = os.environ["ANTHROPIC_API_KEY"]
 SPREADSHEET_ID  = os.environ["SPREADSHEET_ID"]
-RESEND_API_KEY  = os.environ["RESEND_API_KEY"]
-NOTIFY_EMAIL    = os.environ["NOTIFY_EMAIL"]          # your email address
+
 GOOGLE_CREDS    = os.environ["GOOGLE_CREDENTIALS"]    # full JSON string
 
 RESUME_PROFILE  = json.load(open("resume_profile.json"))
@@ -180,13 +180,18 @@ SHEET_HEADERS = [
     "URL", "Match Reason", "Red Flags", "Status", "Notes"
 ]
 
-def get_sheet():
+def get_google_creds():
     creds_dict = json.loads(GOOGLE_CREDS)
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
+        "https://www.googleapis.com/auth/calendar",
     ]
-    creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+    return Credentials.from_service_account_info(creds_dict, scopes=scopes)
+
+
+def get_sheet():
+    creds = get_google_creds()
     gc    = gspread.authorize(creds)
     sh    = gc.open_by_key(SPREADSHEET_ID)
 
@@ -229,55 +234,33 @@ def write_jobs_to_sheet(jobs: list):
     return rows
 
 
-# ── Resend Email Summary ───────────────────────────────────────
-def send_email_summary(jobs: list):
-    safe    = [j for j in jobs if "80" in j.get("_gradient","")]
-    stretch = [j for j in jobs if "60" in j.get("_gradient","")]
-    reach   = [j for j in jobs if "40" in j.get("_gradient","")]
+# ── Google Calendar ────────────────────────────────────────────
+def mark_calendar(jobs: list):
+    safe    = len([j for j in jobs if "80" in j.get("_gradient", "")])
+    stretch = len([j for j in jobs if "60" in j.get("_gradient", "")])
+    reach   = len([j for j in jobs if "40" in j.get("_gradient", "")])
 
-    def job_block(j):
-        url = j.get("redirect_url","#")
-        return (
-            f"<li><b>{j.get('title','')}</b> @ {j.get('company',{}).get('display_name','')}"
-            f" &nbsp;|&nbsp; Score: {j.get('_match_score','')} "
-            f"&nbsp;|&nbsp; {j.get('_apply_recommendation','')}<br>"
-            f"<small>{j.get('_match_reason','')}</small><br>"
-            f"<a href='{url}'>{url}</a></li>"
-        )
+    sheet_url = f"https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}"
 
-    def section(title, color, job_list):
-        if not job_list:
-            return ""
-        items = "".join(job_block(j) for j in job_list)
-        return f"<h3 style='color:{color}'>{title}</h3><ul>{items}</ul>"
+    creds   = get_google_creds()
+    service = build("calendar", "v3", credentials=creds)
 
-    html = f"""
-    <html><body style='font-family:sans-serif;max-width:700px'>
-    <h2>🎯 Daily Job Digest — {TODAY}</h2>
-    <p>Found <b>{len(jobs)}</b> matched positions today. 
-    <a href='https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}'>View full sheet →</a></p>
-    {section("✅ 80% Safe — High Match", "#2e7d32", safe)}
-    {section("🟡 60% Stretch — Good Challenge", "#f57f17", stretch)}
-    {section("🔴 40% Reach — Ambitious", "#c62828", reach)}
-    <hr><p style='color:#999;font-size:12px'>daily-job-search agent · GitHub Actions</p>
-    </body></html>
-    """
-
-    payload = {
-        "from":    "Job Agent <onboarding@resend.dev>",
-        "to":      [NOTIFY_EMAIL],
-        "subject": f"🎯 {len(jobs)} Jobs Found — {TODAY}",
-        "html":    html,
+    # All-day event for today
+    event = {
+        "summary": f"🎯 Job Search: {len(jobs)} jobs found",
+        "description": (
+            f"✅ 80% Safe: {safe}\n"
+            f"🟡 60% Stretch: {stretch}\n"
+            f"🔴 40% Reach: {reach}\n\n"
+            f"View Sheet → {sheet_url}"
+        ),
+        "start": {"date": TODAY},
+        "end":   {"date": TODAY},
+        "colorId": "2",   # green
     }
-    headers = {
-        "Authorization": f"Bearer {RESEND_API_KEY}",
-        "Content-Type":  "application/json",
-    }
-    resp = requests.post("https://api.resend.com/emails", json=payload, headers=headers, timeout=15)
-    if resp.status_code in (200, 201):
-        print("✅ Email sent")
-    else:
-        print(f"❌ Email failed: {resp.status_code} {resp.text}")
+
+    service.events().insert(calendarId="primary", body=event).execute()
+    print("✅ Calendar event created")
 
 
 # ── Main ───────────────────────────────────────────────────────
@@ -299,8 +282,8 @@ def main():
     print("📊 Writing to Google Sheets...")
     write_jobs_to_sheet(scored_jobs)
 
-    print("📧 Sending email summary...")
-    send_email_summary(scored_jobs)
+    print("📅 Marking Google Calendar...")
+    mark_calendar(scored_jobs)
 
     print("✅ Done!")
 
