@@ -199,15 +199,15 @@ def fetch_lever_jobs() -> list:
 
 
 # ── Claude Scoring ─────────────────────────────────────────────
-def score_jobs_with_claude(jobs: list) -> list:
-    client = Anthropic(api_key=ANTHROPIC_KEY)
-
+def score_batch(client, jobs: list) -> list:
+    """Score a single batch of jobs with Claude."""
     job_list_text = "\n\n".join([
         f"[{i+1}] Title: {j.get('title','')}\n"
         f"    Company: {j.get('company',{}).get('display_name','')}\n"
         f"    Location: {j.get('location',{}).get('display_name','')}\n"
+        f"    Source: {j.get('_source','Adzuna')}\n"
         f"    Gradient hint: {j.get('_gradient','')}\n"
-        f"    Description snippet: {j.get('description','')[:300]}"
+        f"    Description: {j.get('description','')[:400]}"
         for i, j in enumerate(jobs)
     ])
 
@@ -245,26 +245,33 @@ Return ONLY the JSON array, no markdown, no explanation."""
     )
 
     try:
-        scored = json.loads(response.content[0].text)
+        return json.loads(response.content[0].text)
     except Exception as e:
         print(f"Claude parse error: {e}")
-        scored = []
+        return []
 
-    # Merge scores back into job dicts
-    score_map = {s["index"]: s for s in scored}
-    enriched = []
-    for i, job in enumerate(jobs):
-        s = score_map.get(i + 1, {})
-        job["_match_score"]          = s.get("match_score", 0)
-        job["_gradient"]             = s.get("gradient", job.get("_gradient", ""))
-        job["_match_reason"]         = s.get("match_reason", "")
-        job["_red_flags"]            = s.get("red_flags", "")
-        job["_apply_recommendation"] = s.get("apply_recommendation", "")
-        enriched.append(job)
+
+def score_jobs_with_claude(jobs: list) -> list:
+    client   = Anthropic(api_key=ANTHROPIC_KEY)
+    scored   = []
+    batch_size = 15
+
+    for i in range(0, len(jobs), batch_size):
+        batch   = jobs[i:i+batch_size]
+        results = score_batch(client, batch)
+        score_map = {s["index"]: s for s in results}
+        for idx, job in enumerate(batch):
+            s = score_map.get(idx + 1, {})
+            job["_match_score"]          = s.get("match_score", 0)
+            job["_gradient"]             = s.get("gradient", job.get("_gradient", ""))
+            job["_match_reason"]         = s.get("match_reason", "")
+            job["_red_flags"]            = s.get("red_flags", "")
+            job["_apply_recommendation"] = s.get("apply_recommendation", "")
+            scored.append(job)
 
     # Sort by score desc, pick top 10
-    enriched.sort(key=lambda x: x["_match_score"], reverse=True)
-    return enriched[:10]
+    scored.sort(key=lambda x: x["_match_score"], reverse=True)
+    return scored[:10]
 
 
 # ── Google Sheets ──────────────────────────────────────────────
