@@ -101,7 +101,101 @@ def collect_all_jobs() -> list:
             if jid and jid not in seen_ids:
                 seen_ids.add(jid)
                 all_jobs.append(job)
+
+    # Add Greenhouse and Lever jobs
+    for job in fetch_greenhouse_jobs() + fetch_lever_jobs():
+        jid = job.get("id", "")
+        if jid and jid not in seen_ids:
+            seen_ids.add(jid)
+            all_jobs.append(job)
+
     return all_jobs
+
+
+# ── Greenhouse ─────────────────────────────────────────────────
+# Well-known Bay Area / remote-friendly companies on Greenhouse
+GREENHOUSE_BOARDS = [
+    "anthropic", "openai", "stripe", "notion", "figma",
+    "vercel", "linear", "retool", "rippling", "brex",
+    "scale", "weights-biases", "cohere", "mistral",
+]
+
+KEYWORDS_FULLSTACK = ["full stack", "fullstack", "full-stack", "frontend", "backend", "software engineer", "react", "laravel"]
+
+def fetch_greenhouse_jobs() -> list:
+    jobs = []
+    for board in GREENHOUSE_BOARDS:
+        try:
+            url  = f"https://boards-api.greenhouse.io/v1/boards/{board}/jobs?content=true"
+            resp = requests.get(url, timeout=10)
+            if resp.status_code != 200:
+                continue
+            for j in resp.json().get("jobs", []):
+                title = j.get("title", "").lower()
+                if not any(k in title for k in KEYWORDS_FULLSTACK):
+                    continue
+                location = j.get("location", {}).get("name", "")
+                is_remote = "remote" in location.lower()
+                is_bay    = any(x in location.lower() for x in ["san francisco", "bay area", "sf", "remote"])
+                if not (is_remote or is_bay):
+                    continue
+                jobs.append({
+                    "id":          f"gh-{j.get('id')}",
+                    "title":       j.get("title", ""),
+                    "company":     {"display_name": board.capitalize()},
+                    "location":    {"display_name": location},
+                    "redirect_url": j.get("absolute_url", ""),
+                    "description": j.get("content", "")[:500],
+                    "_gradient":   "60% Stretch",
+                    "_is_remote":  is_remote,
+                    "_source":     "Greenhouse",
+                })
+        except Exception as e:
+            print(f"Greenhouse error for {board}: {e}")
+    print(f"   Greenhouse: {len(jobs)} jobs")
+    return jobs
+
+
+# ── Lever ──────────────────────────────────────────────────────
+LEVER_BOARDS = [
+    "netflix", "airbnb", "lyft", "coinbase", "reddit",
+    "discord", "airtable", "carta", "lattice", "loom",
+    "benchling", "plaid", "asana",
+]
+
+def fetch_lever_jobs() -> list:
+    jobs = []
+    for board in LEVER_BOARDS:
+        try:
+            url  = f"https://api.lever.co/v0/postings/{board}?mode=json"
+            resp = requests.get(url, timeout=10)
+            if resp.status_code != 200:
+                continue
+            for j in resp.json():
+                title    = j.get("text", "").lower()
+                if not any(k in title for k in KEYWORDS_FULLSTACK):
+                    continue
+                location = j.get("categories", {}).get("location", "")
+                team     = j.get("categories", {}).get("team", "")
+                is_remote = "remote" in location.lower()
+                is_bay    = any(x in location.lower() for x in ["san francisco", "bay area", "sf", "remote"])
+                if not (is_remote or is_bay):
+                    continue
+                jobs.append({
+                    "id":          f"lv-{j.get('id')}",
+                    "title":       j.get("text", ""),
+                    "company":     {"display_name": board.capitalize()},
+                    "location":    {"display_name": location or "Remote"},
+                    "redirect_url": j.get("hostedUrl", ""),
+                    "description": j.get("descriptionPlain", "")[:500],
+                    "_gradient":   "60% Stretch",
+                    "_is_remote":  is_remote,
+                    "_source":     "Lever",
+                })
+        except Exception as e:
+            print(f"Lever error for {board}: {e}")
+    print(f"   Lever: {len(jobs)} jobs")
+    return jobs
 
 
 # ── Claude Scoring ─────────────────────────────────────────────
@@ -175,7 +269,7 @@ Return ONLY the JSON array, no markdown, no explanation."""
 
 # ── Google Sheets ──────────────────────────────────────────────
 SHEET_HEADERS = [
-    "Date", "Gradient", "Score", "Recommend",
+    "Date", "Source", "Gradient", "Score", "Recommend",
     "Job Title", "Company", "Location", "Remote",
     "URL", "Match Reason", "Red Flags", "Status", "Notes"
 ]
@@ -214,6 +308,7 @@ def write_jobs_to_sheet(jobs: list):
         is_remote = "Yes" if j.get("_is_remote") or "remote" in j.get("title","").lower() else ""
         rows.append([
             TODAY,
+            j.get("_source", "Adzuna"),
             j.get("_gradient", ""),
             j.get("_match_score", ""),
             j.get("_apply_recommendation", ""),
@@ -224,8 +319,8 @@ def write_jobs_to_sheet(jobs: list):
             redirect,
             j.get("_match_reason", ""),
             j.get("_red_flags", ""),
-            "Pending",   # Status — update manually
-            "",          # Notes
+            "Pending",
+            "",
         ])
 
     ws.append_rows(rows, value_input_option="USER_ENTERED")
