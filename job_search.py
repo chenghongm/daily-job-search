@@ -361,7 +361,7 @@ def score_jobs(jobs: list, model: str) -> list:
 
 # ── Google Sheets ──────────────────────────────────────────────
 SHEET_HEADERS = [
-    "Date", "Source", "Gradient", "Score", "Recommend",
+    "Date", "Time", "Source", "Gradient", "Score", "Recommend",
     "Job Title", "Company", "Location", "Remote",
     "URL", "Match Reason", "Red Flags", "Status", "Notes"
 ]
@@ -392,11 +392,13 @@ def write_jobs_to_tab(jobs: list, tab_name: str):
     ws    = get_or_create_tab(sh, tab_name)
 
     rows = []
+    now = datetime.datetime.now().strftime("%H:%M:%S")
     for j in jobs:
         redirect  = j.get("redirect_url", "")
         is_remote = "Yes" if j.get("_is_remote") or "remote" in j.get("title","").lower() else ""
         rows.append([
             TODAY,
+            now,
             j.get("_source", "Adzuna"),
             j.get("_gradient", ""),
             j.get("_match_score", ""),
