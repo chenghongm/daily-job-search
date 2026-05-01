@@ -1,6 +1,6 @@
 # daily-job-search
 
-每天 11am PST 自动搜职位 → Claude 评分 → Google Sheets → 邮件摘要
+每天 11am PST 自动搜职位 → Claude 评分 → Google Sheets → marked at calendar
 
 ---
 
@@ -9,8 +9,8 @@
 ```
 daily-job-search/
 ├── .github/workflows/daily_job_search.yml   # GitHub Actions schedule
-├── job_search.py                            # 主逻辑
-├── resume_profile.json                      # 技能画像（可随时更新）
+├── job_search.py                            # main logic
+├── resume_profile.json                      # skills
 ├── requirements.txt
 └── README.md
 ```
@@ -50,15 +50,7 @@ daily-job-search/
 
 ---
 
-### 4. Resend（免费邮件服务）
-
-1. 注册：https://resend.com
-2. 获取 API Key
-3. 免费版每月 3000 封，完全够用
-
----
-
-### 5. GitHub Secrets 配置
+### 4. GitHub Secrets 配置
 
 进入repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
 
@@ -76,7 +68,7 @@ daily-job-search/
 
 ---
 
-### 6. Push 代码
+### 5. Push 代码
 
 ```bash
 git add .
@@ -108,6 +100,8 @@ Push 完成后：
 ---
 
 ## Google Sheet 列说明
+
+each model write on their own tab
 
 | 列 | 说明 |
 |----|------|
