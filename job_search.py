@@ -307,8 +307,33 @@ def score_batch(jobs: list) -> list:
 
 
 
+def pick_by_quota(scored: list) -> list:
+    """Pick top jobs with gradient quota: 3 Safe + 5 Stretch + 2 Reach."""
+    quotas = {"80% Safe": 3, "60% Stretch": 5, "40% Reach": 2}
+    buckets = {"80% Safe": [], "60% Stretch": [], "40% Reach": []}
+
+    for job in sorted(scored, key=lambda x: x["_match_score"], reverse=True):
+        gradient = job.get("_gradient", "")
+        for key in buckets:
+            if key in gradient and len(buckets[key]) < quotas[key]:
+                buckets[key].append(job)
+                break
+
+    result = buckets["80% Safe"] + buckets["60% Stretch"] + buckets["40% Reach"]
+
+    # If any bucket is short, fill with remaining high-score jobs
+    if len(result) < 10:
+        used_urls = {j.get("redirect_url") for j in result}
+        extras = [j for j in sorted(scored, key=lambda x: x["_match_score"], reverse=True)
+                  if j.get("redirect_url") not in used_urls]
+        result += extras[:10 - len(result)]
+
+    print(f"   Safe:{len(buckets['80% Safe'])} Stretch:{len(buckets['60% Stretch'])} Reach:{len(buckets['40% Reach'])}")
+    return result
+
+
 def score_jobs(jobs: list, model: str) -> list:
-    """Score jobs with a specific model, return top 10."""
+    """Score jobs with a specific model, return top 10 by gradient quota."""
     scored     = []
     batch_size = 15
 
@@ -333,8 +358,7 @@ def score_jobs(jobs: list, model: str) -> list:
             job["_apply_recommendation"] = s.get("apply_recommendation", "")
             scored.append(job)
 
-    scored.sort(key=lambda x: x["_match_score"], reverse=True)
-    return scored[:10]
+    return pick_by_quota(scored)
 
 
 # ── Google Sheets ──────────────────────────────────────────────
@@ -423,6 +447,28 @@ def mark_calendar(results_by_model: dict):
     print(f"✅ Calendar event created: {result.get('htmlLink')}")
 
 
+# ── Dedup: read existing URLs from all tabs ────────────────────
+def get_seen_urls() -> set:
+    """Read all job URLs already written to any tab in the Sheet."""
+    try:
+        creds = get_google_creds()
+        gc    = gspread.authorize(creds)
+        sh    = gc.open_by_key(SPREADSHEET_ID)
+        seen  = set()
+        url_col = SHEET_HEADERS.index("URL") + 1  # 1-based
+        for ws in sh.worksheets():
+            try:
+                urls = ws.col_values(url_col)[1:]  # skip header
+                seen.update(u for u in urls if u)
+            except Exception:
+                pass
+        print(f"   🔁 Dedup: {len(seen)} URLs already seen")
+        return seen
+    except Exception as e:
+        print(f"   Dedup read error (skipping): {e}")
+        return set()
+
+
 # ── Main ───────────────────────────────────────────────────────
 def main():
     print(f"🔍 Starting daily job search — {TODAY}")
@@ -433,6 +479,15 @@ def main():
 
     if not raw_jobs:
         print("⚠️  No jobs found today, exiting.")
+        return
+
+    # Dedup against already-seen URLs
+    seen_urls = get_seen_urls()
+    new_jobs  = [j for j in raw_jobs if j.get("redirect_url", "") not in seen_urls]
+    print(f"   After dedup: {len(new_jobs)} new jobs")
+
+    if not new_jobs:
+        print("⚠️  No new jobs today, exiting.")
         return
 
     scoring_model = os.environ.get("SCORING_MODEL", "all").lower()
@@ -449,7 +504,7 @@ def main():
 
         print(f"\n🤖 Scoring with {model.upper()}...")
         try:
-            scored = score_jobs(raw_jobs, model)
+            scored = score_jobs(new_jobs, model)
             print(f"   Top {len(scored)} jobs selected")
             write_jobs_to_tab(scored, model.capitalize())
             results_by_model[model] = scored
