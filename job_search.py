@@ -417,6 +417,23 @@ def write_jobs_to_tab(jobs: list, tab_name: str):
         ])
 
     ws.append_rows(rows, value_input_option="USER_ENTERED")
+
+    # Color highlight Recommend column: Maybe=orange, Skip=red
+    try:
+        recommend_col = SHEET_HEADERS.index("Recommend") + 1
+        all_values = ws.col_values(recommend_col)
+        for row_idx, val in enumerate(all_values[1:], start=2):  # skip header
+            if val == "Maybe":
+                ws.format(f"{chr(64+recommend_col)}{row_idx}", {
+                    "backgroundColor": {"red": 1.0, "green": 0.6, "blue": 0.0}
+                })
+            elif val == "Skip":
+                ws.format(f"{chr(64+recommend_col)}{row_idx}", {
+                    "backgroundColor": {"red": 0.9, "green": 0.2, "blue": 0.2}
+                })
+    except Exception as e:
+        print(f"   Color format error (non-fatal): {e}")
+
     print(f"✅ [{tab_name}] Written {len(rows)} jobs")
 
 
@@ -449,22 +466,45 @@ def mark_calendar(results_by_model: dict):
     print(f"✅ Calendar event created: {result.get('htmlLink')}")
 
 
-# ── Dedup: read existing URLs from all tabs ────────────────────
-def get_seen_urls() -> set:
-    """Read all job URLs already written to any tab in the Sheet."""
+def extract_job_id(url: str) -> str:
+    """Extract stable job ID from URL for dedup purposes."""
+    import re
+    if not url:
+        return ""
+    m = re.search(r'/land/ad/(\d+)', url)
+    if m:
+        return f"adzuna-{m.group(1)}"
+    m = re.search(r'gh_jid=(\d+)', url)
+    if m:
+        return f"gh-{m.group(1)}"
+    m = re.search(r'/jobs/(\d+)', url)
+    if m:
+        return f"gh-{m.group(1)}"
+    m = re.search(r'/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})', url)
+    if m:
+        return f"lv-{m.group(1)}"
+    return url
+
+
+# ── Dedup: read existing job IDs from all tabs ─────────────────
+def get_seen_ids() -> set:
+    """Read all job IDs already written to any tab in the Sheet."""
     try:
-        creds = get_google_creds()
-        gc    = gspread.authorize(creds)
-        sh    = gc.open_by_key(SPREADSHEET_ID)
-        seen  = set()
-        url_col = SHEET_HEADERS.index("URL") + 1  # 1-based
+        creds   = get_google_creds()
+        gc      = gspread.authorize(creds)
+        sh      = gc.open_by_key(SPREADSHEET_ID)
+        seen    = set()
+        url_col = SHEET_HEADERS.index("URL") + 1
         for ws in sh.worksheets():
             try:
-                urls = ws.col_values(url_col)[1:]  # skip header
-                seen.update(u for u in urls if u)
+                urls = ws.col_values(url_col)[1:]
+                for u in urls:
+                    jid = extract_job_id(u)
+                    if jid:
+                        seen.add(jid)
             except Exception:
                 pass
-        print(f"   🔁 Dedup: {len(seen)} URLs already seen")
+        print(f"   🔁 Dedup: {len(seen)} job IDs already seen")
         return seen
     except Exception as e:
         print(f"   Dedup read error (skipping): {e}")
@@ -483,9 +523,9 @@ def main():
         print("⚠️  No jobs found today, exiting.")
         return
 
-    # Dedup against already-seen URLs
-    seen_urls = get_seen_urls()
-    new_jobs  = [j for j in raw_jobs if j.get("redirect_url", "") not in seen_urls]
+    # Dedup against already-seen job IDs
+    seen_ids = get_seen_ids()
+    new_jobs  = [j for j in raw_jobs if extract_job_id(j.get("redirect_url", "")) not in seen_ids]
     print(f"   After dedup: {len(new_jobs)} new jobs")
 
     if not new_jobs:
