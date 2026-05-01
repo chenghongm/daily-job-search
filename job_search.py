@@ -212,6 +212,7 @@ def build_prompt(jobs: list) -> str:
         f"    Company: {j.get('company',{}).get('display_name','')}\n"
         f"    Location: {j.get('location',{}).get('display_name','')}\n"
         f"    Source: {j.get('_source','Adzuna')}\n"
+        f"    Gradient hint: {j.get('_gradient','')}\n"
         f"    Description: {j.get('description','')[:400]}"
         for i, j in enumerate(jobs)
     ])
@@ -233,6 +234,7 @@ For each job return a JSON array. Each element:
 {{
   "index": <1-based number>,
   "match_score": <0-100>,
+  "gradient": "<40% Reach | 60% Stretch | 80% Safe>",
   "match_reason": "<1 sentence why>",
   "red_flags": "<any mismatch or concern, or 'none'>",
   "apply_recommendation": "<Yes | Maybe | Skip>"
@@ -350,7 +352,7 @@ def score_jobs(jobs: list, model: str) -> list:
         for idx, job in enumerate(batch_copy):
             s = score_map.get(idx + 1, {})
             job["_match_score"]          = s.get("match_score", 0)
-            # gradient kept from original source, not overridden by model
+            job["_gradient"]             = s.get("gradient", job.get("_gradient", ""))
             job["_match_reason"]         = s.get("match_reason", "")
             job["_red_flags"]            = s.get("red_flags", "")
             job["_apply_recommendation"] = s.get("apply_recommendation", "")
