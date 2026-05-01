@@ -31,7 +31,10 @@ jobs:
           ADZUNA_APP_ID:       ${{ secrets.ADZUNA_APP_ID }}
           ADZUNA_APP_KEY:      ${{ secrets.ADZUNA_APP_KEY }}
           ANTHROPIC_API_KEY:   ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY:      ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY:      ${{ secrets.OPENAI_API_KEY }}
           SPREADSHEET_ID:      ${{ secrets.SPREADSHEET_ID }}
           GOOGLE_CREDENTIALS:  ${{ secrets.GOOGLE_CREDENTIALS }}
           CALENDAR_ID:         ${{ secrets.CALENDAR_ID }}
+          SCORING_MODEL:       ${{ secrets.SCORING_MODEL }}
         run: python job_search.py
