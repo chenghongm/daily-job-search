@@ -568,6 +568,112 @@ def get_seen_ids() -> set:
         print(f"   Dedup read error (skipping): {e}")
         return set()
 
+def vote_result(results_by_model: dict) -> list:
+ 
+    weights = {
+        "gemini": 0.4,
+        "claude": 0.35,
+        "gpt": 0.25,
+    }
+
+    # collect by URL
+    job_map = {}
+
+    for model, jobs in results_by_model.items():
+        for j in jobs:
+            url = j.get("redirect_url")
+            if not url:
+                continue
+
+            if url not in job_map:
+                job_map[url] = {
+                    "job": j,
+                    "scores": {},
+                    "recs": {}
+                }
+
+            job_map[url]["scores"][model] = j.get("_match_score", 0)
+            job_map[url]["recs"][model] = j.get("_apply_recommendation", "")
+
+    final_results = []
+
+    for url, data in job_map.items():
+        scores = data["scores"]
+        recs   = data["recs"]
+
+        # weighted score
+        final_score = sum(
+            weights[m] * scores.get(m, 0)
+            for m in weights
+        )
+
+        # disagreement
+        if scores:
+            disagreement = max(scores.values()) - min(scores.values())
+        else:
+            disagreement = 0
+
+        # vote counts
+        yes_count  = sum(1 for r in recs.values() if r == "Yes")
+        skip_count = sum(1 for r in recs.values() if r == "Skip")
+
+        # final recommend
+        if final_score >= 78 and disagreement <= 12:
+            final_rec = "Strong Apply"
+        elif final_score >= 68:
+            final_rec = "Apply / Review"
+        elif disagreement >= 18:
+            final_rec = "Human Review"
+        elif skip_count >= 2:
+            final_rec = "Skip"
+        else:
+            final_rec = "Apply / Review"
+
+        job = data["job"]
+
+        job["_vote_score"] = round(final_score, 1)
+        job["_vote_recommend"] = final_rec
+        job["_disagreement"] = disagreement
+
+        final_results.append(job)
+
+    # sort
+    final_results.sort(key=lambda x: x["_vote_score"], reverse=True)
+
+    return final_results
+
+def write_vote_results(jobs: list):
+    creds = get_google_creds()
+    gc    = gspread.authorize(creds)
+    sh    = gc.open_by_key(SPREADSHEET_ID)
+
+    ws = get_or_create_tab(sh, "Vote")
+
+    rows = []
+    now = datetime.datetime.now().strftime("%H:%M:%S")
+
+    for j in jobs:
+        rows.append([
+            TODAY,
+            now,
+            j.get("_source", ""),
+            j.get("_gradient", ""),
+            j.get("_vote_score", ""),
+            j.get("_vote_recommend", ""),   # 👈 关键
+            j.get("title", ""),
+            j.get("company", {}).get("display_name", ""),
+            j.get("location", {}).get("display_name", ""),
+            "Yes" if j.get("_is_remote") else "",
+            j.get("redirect_url", ""),
+            j.get("_match_reason", ""),
+            f"disagreement={j.get('_disagreement', 0)}",
+            "Pending",
+            "",
+        ])
+
+    ws.append_rows(rows, value_input_option="USER_ENTERED")
+
+    print(f"✅ [Vote] Written {len(rows)} jobs")
 
 # ── Main ───────────────────────────────────────────────────────
 def main():
@@ -614,6 +720,11 @@ def main():
     if results_by_model:
         print("\n📅 Marking Google Calendar...")
         mark_calendar(results_by_model)
+
+        # Perform voting logic
+        print("\n🗳️ Voting across models...")
+        voted = vote_result(results_by_model)
+        write_vote_results(voted)
 
     print("\n✅ Done!")
 
