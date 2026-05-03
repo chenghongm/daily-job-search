@@ -212,33 +212,72 @@ def build_prompt(jobs: list) -> str:
         f"    Company: {j.get('company',{}).get('display_name','')}\n"
         f"    Location: {j.get('location',{}).get('display_name','')}\n"
         f"    Source: {j.get('_source','Adzuna')}\n"
-        f"    Gradient hint: {j.get('_gradient','')}\n"
-        f"    Description: {j.get('description','')[:400]}"
+        f"    Search bucket hint: {j.get('_gradient','')}\n"
+        f"    Description: {j.get('description','')[:700]}"
         for i, j in enumerate(jobs)
     ])
+
     profile_summary = json.dumps(RESUME_PROFILE["core_skills"], ensure_ascii=False)
-    return f"""You are a job matching assistant. Evaluate each job against this candidate profile.
+
+    return f"""You are a practical job-search scoring assistant.
+
+Your job is NOT to score generic semantic relevance.
+Your job is to estimate whether THIS candidate should realistically apply.
 
 CANDIDATE PROFILE:
-- 5+ years Full Stack Developer (React, Laravel/PHP, MySQL, AWS, Docker)
-- AI/LLM experience: prompt engineering, local fine-tuning, AI agent building
-- Location: SF Bay Area, open to remote, NO relocation
+- 5+ years Full Stack Developer
+- Strong: React, Laravel/PHP, MySQL, AWS, Docker
+- AI/LLM application experience: prompt engineering, local fine-tuning, AI agent building
+- Location: SF Bay Area or remote only
+- NO relocation
 - GitHub: 6200+ contributions
 
-SKILLS: {profile_summary}
+SKILLS:
+{profile_summary}
+
+SCORING MEANING:
+- 90-100: Excellent realistic fit; strong apply
+- 80-89: Good realistic fit
+- 70-79: Possible but meaningful gap
+- 60-69: Stretch / low probability
+- <60: Skip unless strategically valuable
+
+STRICT SENIORITY CALIBRATION:
+- Candidate has 5+ years experience.
+- Regular Software Engineer / Full Stack Engineer can be Safe.
+- Senior Software Engineer can be Safe or Stretch depending on fit.
+- Staff / Staff+ / Senior Staff / Principal / Architect roles are normally Reach.
+- Staff-level roles must NOT score above 75 unless the JD explicitly says 5-7 years OR the role is clearly hands-on without staff-level leadership scope.
+- Senior Staff / Principal roles must normally score <=65.
+- If seniority is the main mismatch, final_score must be <=72.
+- Do not over-reward famous AI companies or AI/platform keywords if seniority is too high.
+
+LOCATION CALIBRATION:
+- SF Bay Area, hybrid SF, or remote US are acceptable.
+- Any required relocation is a hard red flag and should usually be Skip.
+
+GRADIENT RULES:
+- 80% Safe = realistic fit for current profile
+- 60% Stretch = possible but has meaningful gap
+- 40% Reach = interesting but low-probability / seniority mismatch / domain mismatch
 
 JOBS TO EVALUATE:
 {job_list_text}
 
-For each job return a JSON array. Each element:
+For each job return a JSON array. Each element must be:
 {{
   "index": <1-based number>,
-  "match_score": <0-100>,
+  "match_score": <0-100 final score>,
   "gradient": "<40% Reach | 60% Stretch | 80% Safe>",
-  "match_reason": "<1 sentence why>",
-  "red_flags": "<any mismatch or concern, or 'none'>",
+  "match_reason": "<1 sentence grounded in candidate fit>",
+  "red_flags": "<seniority/location/domain mismatch, or 'none'>",
   "apply_recommendation": "<Yes | Maybe | Skip>"
 }}
+
+Recommendation rules:
+- Yes: score >= 70 and no hard red flag
+- Maybe: score 55-69, or score >=70 with notable seniority risk
+- Skip: score <55, relocation required, or severe seniority mismatch
 
 Return ONLY the JSON array, no markdown, no explanation."""
 
@@ -305,7 +344,25 @@ def score_batch(jobs: list) -> list:
     else:
         return score_batch_claude(jobs)
 
+def normalize_gradient(job: dict) -> str:
+    title = job.get("title", "").lower()
+    score = job.get("_match_score", 0)
 
+    staff_terms = ["staff", "staff+", "senior staff", "principal", "architect"]
+    is_staff_level = any(t in title for t in staff_terms)
+
+    if is_staff_level:
+        if "senior staff" in title or "principal" in title:
+            return "40% Reach"
+        if score > 75:
+            job["_match_score"] = 75
+        return "40% Reach"
+
+    if score >= 80:
+        return "80% Safe"
+    if score >= 65:
+        return "60% Stretch"
+    return "40% Reach"
 
 def pick_by_quota(scored: list) -> list:
     """Pick top jobs with gradient quota: 3 Safe + 5 Stretch + 2 Reach."""
@@ -356,6 +413,7 @@ def score_jobs(jobs: list, model: str) -> list:
             job["_match_reason"]         = s.get("match_reason", "")
             job["_red_flags"]            = s.get("red_flags", "")
             job["_apply_recommendation"] = s.get("apply_recommendation", "")
+            job["_gradient"] = normalize_gradient(job)
             scored.append(job)
 
     return pick_by_quota(scored)
