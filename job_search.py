@@ -414,6 +414,8 @@ def score_jobs(jobs: list, model: str) -> list:
             job["_red_flags"]            = s.get("red_flags", "")
             job["_apply_recommendation"] = s.get("apply_recommendation", "")
             job["_gradient"] = normalize_gradient(job)
+            if "Skip" in job.get("_apply_recommendation", ""): # Filter out Skip jobs early， to avoid filling the quota with low-quality listings
+                continue
             scored.append(job)
 
     return pick_by_quota(scored)
@@ -568,6 +570,45 @@ def get_seen_ids() -> set:
         print(f"   Dedup read error (skipping): {e}")
         return set()
 
+def filter_for_voting(results_by_model: dict) -> dict:
+    """
+    只保留值得投票的 jobs
+    条件：
+    - 至少一个模型标为 60% Stretch 或 80% Safe
+    """
+
+    job_map = {}
+
+    for model, jobs in results_by_model.items():
+        for j in jobs:
+            url = j.get("redirect_url")
+            if not url:
+                continue
+
+            if url not in job_map:
+                job_map[url] = []
+
+            job_map[url].append(j)
+
+    filtered = {}
+
+    for url, jobs in job_map.items():
+        keep = any(
+            ("60% Stretch" in j.get("_gradient", "") or
+            "80% Safe" in j.get("_gradient", "") or
+            j.get("_match_score", 0) >= 65)
+            for j in jobs
+        )
+
+        if not keep:
+            continue
+
+        for j in jobs:
+            model = j.get("_model")  # 如果你有标 model
+            if model:
+                filtered.setdefault(model, []).append(j)
+
+    return filtered
 def vote_result(results_by_model: dict) -> list:
  
     weights = {
@@ -723,8 +764,14 @@ def main():
 
         # Perform voting logic
         print("\n🗳️ Voting across models...")
-        voted = vote_result(results_by_model)
-        write_vote_results(voted)
+
+        filtered = filter_for_voting(results_by_model)
+
+        if not filtered:
+            print("⚠️ No high-value jobs for voting, skipping vote step")
+        else:
+            voted = vote_result(filtered)
+            write_vote_results(voted)
 
     print("\n✅ Done!")
 
