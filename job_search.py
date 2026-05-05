@@ -363,7 +363,7 @@ def pick_by_quota(scored: list) -> list:
     """Pick top jobs with gradient quota: 3 Safe + 5 Stretch + 2 Reach."""
     quotas = {"80% Safe": 3, "60% Stretch": 5, "40% Reach": 2}
     buckets = {"80% Safe": [], "60% Stretch": [], "40% Reach": []}
-
+    print(f"   pick_by_quota received: {len(scored)} jobs")
     for job in sorted(scored, key=lambda x: x["_match_score"], reverse=True):
         gradient = job.get("_gradient", "")
         for key in buckets:
