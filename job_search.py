@@ -219,68 +219,59 @@ def build_prompt(jobs: list) -> str:
 
     profile_summary = json.dumps(RESUME_PROFILE["core_skills"], ensure_ascii=False)
 
-    return f"""You are a practical job-search scoring assistant.
+    # 保持同样的 f-string 结构，但优化内部逻辑
+    return f"""You are a senior technical recruiter specializing in engineering roles.
+Your goal is to evaluate if this specific candidate should apply based on high-impact results.
 
-Your job is NOT to score generic semantic relevance.
-Your job is to estimate whether THIS candidate should realistically apply.
-
-CANDIDATE PROFILE:
-- 5+ years Full Stack Developer
-- Strong: React, Laravel/PHP, MySQL, AWS, Docker
-- AI/LLM application experience: prompt engineering, local fine-tuning, AI agent building
-- Location: SF Bay Area or remote only
-- NO relocation
-- GitHub: 6200+ contributions
+CANDIDATE CORE VALUE:
+- 5+ years Full Stack Developer (PHP/Laravel, React, Java, MySQL)
+- KEY ACHIEVEMENT: Optimized 12TB storage to 7TB (42% reduction) - indicates high-level data architecture skills.
+- HIGH VELOCITY: 6200+ GitHub contributions (extreme output density).
+- AI DEPTH: Built local Llama-3 fine-tuning pipelines (MLX) and AI UX tools.
+- Location: SF Bay Area / Remote only. NO relocation.
 
 SKILLS:
 {profile_summary}
 
 SCORING MEANING:
-- 90-100: Excellent realistic fit; strong apply
-- 80-89: Good realistic fit
-- 70-79: Possible but meaningful gap
-- 60-69: Stretch / low probability
-- <60: Skip unless strategically valuable
+- 90-100: Exceptional fit; technical stack and seniority align perfectly.
+- 80-89: Strong fit; highly realistic.
+- 70-79: Good candidate; minor stack gap or "Safe Reach" for Staff roles.
+- 60-69: Stretch; significant domain or seniority mismatch.
+- <60: Skip.
 
-STRICT SENIORITY CALIBRATION:
-- Candidate has 5+ years experience.
-- Regular Software Engineer / Full Stack Engineer can be Safe.
-- Senior Software Engineer can be Safe or Stretch depending on fit.
-- Staff / Staff+ / Senior Staff / Principal / Architect roles are normally Reach.
-- Staff-level roles must NOT score above 75 unless the JD explicitly says 5-7 years OR the role is clearly hands-on without staff-level leadership scope.
-- Senior Staff / Principal roles must normally score <=65.
-- If seniority is the main mismatch, final_score must be <=72.
-- Do not over-reward famous AI companies or AI/platform keywords if seniority is too high.
-
-LOCATION CALIBRATION:
-- SF Bay Area, hybrid SF, or remote US are acceptable.
-- Any required relocation is a hard red flag and should usually be Skip.
+STRICT CALIBRATION RULES:
+1. SENIORITY FLEXIBILITY: The 12TB optimization and 6200+ commits represent "Staff-level impact". 
+   - Senior roles are the "Sweet Spot" (85-95).
+   - Staff roles: If the JD is hands-on and technical (Laravel/React/Data), LIFT the 75-point cap. Score 75-84.
+   - ONLY score <=72 if the role is purely People Management or 12+ years leadership.
+2. DATA OVER KEYWORDS: Prioritize jobs mentioning "Refactoring", "Optimization", or "Scale".
+3. LOCATION: Hard red flag if relocation is required.
 
 GRADIENT RULES:
-- 80% Safe = realistic fit for current profile
-- 60% Stretch = possible but has meaningful gap
-- 40% Reach = interesting but low-probability / seniority mismatch / domain mismatch
+- 80% Safe = Strong technical and seniority alignment.
+- 60% Stretch = Good tech match but seniority/domain gap.
+- 40% Reach = Staff/Principal level or tech stack pivot.
 
 JOBS TO EVALUATE:
 {job_list_text}
 
-For each job return a JSON array. Each element must be:
+Return ONLY a JSON array. Each element:
 {{
-  "index": <1-based number>,
-  "match_score": <0-100 final score>,
+  "index": <number>,
+  "match_score": <number>,
   "gradient": "<40% Reach | 60% Stretch | 80% Safe>",
-  "match_reason": "<1 sentence grounded in candidate fit>",
+  "technical_hook": "<1 sentence linking the candidate's specific achievement (e.g. 12TB optimization) to this JD>",
   "red_flags": "<seniority/location/domain mismatch, or 'none'>",
   "apply_recommendation": "<Yes | Maybe | Skip>"
 }}
 
 Recommendation rules:
-- Yes: score >= 70 and no hard red flag
-- Maybe: score 55-69, or score >=70 with notable seniority risk
-- Skip: score <55, relocation required, or severe seniority mismatch
+- Yes: score >= 78 and no location red flag.
+- Maybe: score 65-77, or high-fit Staff roles.
+- Skip: score < 65 or relocation required.
 
 Return ONLY the JSON array, no markdown, no explanation."""
-
 
 def parse_json_response(text: str) -> list:
     try:
