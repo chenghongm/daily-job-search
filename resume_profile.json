@@ -8,34 +8,35 @@
     "languages": ["JavaScript", "PHP", "Python", "Java", "HTML", "CSS"],
     "frontend": ["React", "Vue"],
     "backend": ["Laravel", "RESTful APIs"],
-    "database": ["MySQL"],
+    "database": ["MySQL (Query Optimization, Transactional Integrity, Data Pruning)"],
     "devops": ["AWS", "Docker", "Git", "GitHub"],
     "ai_ml": ["LLM integration", "AI Agent", "Prompt Engineering", "Local LLM fine-tuning", "MLX", "Llama-3"],
     "tools": ["Notion", "Terminal", "Chrome Extension development"]
   },
   "highlights": [
-    "6200+ GitHub contributions",
+    "Optimized storage from 12TB to 7TB (42% reduction) through versioning policy & data archiving",
+    "6200+ GitHub contributions since May 2022 (Extreme output density)",
     "Built AI Assistant Layer managing full LLM workflow (33% time saving)",
-    "Local LLM fine-tuning pipeline on Apple Silicon (MLX)",
-    "Chrome Extension for multi-platform AI chat UI",
-    "Scheduling, workflow, and compliance systems at scale"
+    "Local LLM fine-tuning pipeline on Apple Silicon (MLX/M5 Mac)",
+    "Built complex Bank-style PTO tracking and automated scheduling systems",
+    "Chrome Extension for multi-platform AI chat UI enhancement"
   ],
   "education": "Master in Computer Science",
   "gradient_targets": {
     "safe_80": {
-      "description": "Full Stack Developer at mid-size company, Laravel/React stack",
+      "description": "Full Stack Developer (Senior/Mid) with Laravel/React stack",
       "keywords": ["full stack developer", "react developer", "laravel developer", "php developer"],
       "seniority": ["mid", "senior"]
     },
     "stretch_60": {
-      "description": "Senior Full Stack or AI-augmented product roles",
+      "description": "Senior/Staff Full Stack or AI-focused product roles",
       "keywords": ["senior full stack", "AI engineer", "LLM engineer", "full stack AI"],
       "seniority": ["senior", "staff"]
     },
     "reach_40": {
-      "description": "Staff Engineer or AI Infrastructure roles",
-      "keywords": ["staff engineer", "AI platform engineer", "ML engineer", "AI infrastructure"],
-      "seniority": ["staff", "principal", "lead"]
+      "description": "Staff Engineer or Infrastructure-heavy roles",
+      "keywords": ["staff engineer", "AI platform engineer", "infrastructure engineer"],
+      "seniority": ["staff", "principal"]
     }
   }
 }
