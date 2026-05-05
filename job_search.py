@@ -288,7 +288,7 @@ def score_batch_claude(jobs: list) -> list:
     prompt   = build_prompt(jobs)
     response = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=2000,
+        max_tokens=8192,
         messages=[{"role": "user", "content": prompt}]
     )
     return parse_json_response(response.content[0].text)
@@ -304,8 +304,8 @@ def score_batch_gemini(jobs: list) -> list:
     if not resp.ok:
         print(f"Gemini error: {resp.status_code} {resp.text}")
         resp.raise_for_status()
-    resp   = requests.post(url, json=body, timeout=30)
-    resp.raise_for_status()
+    # resp   = requests.post(url, json=body, timeout=30)
+    # resp.raise_for_status()
     text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
     return parse_json_response(text)
 
