@@ -15,6 +15,7 @@ Set SCORING_MODEL in GitHub Secrets to switch:
 import os
 import json
 import datetime
+from pydoc import text
 import requests
 from anthropic import Anthropic
 
@@ -291,7 +292,10 @@ def score_batch_claude(jobs: list) -> list:
         max_tokens=8192,
         messages=[{"role": "user", "content": prompt}]
     )
-    return parse_json_response(response.content[0].text)
+    text = response.content[0].text
+    print(f"Response length: {len(text)}")
+    print(f"Last 200 chars: {text[-200:]}")
+    return parse_json_response(text)
 
 
 # ── Scoring: Gemini ────────────────────────────────────────────
