@@ -409,6 +409,7 @@ def score_jobs(jobs: list, model: str) -> list:
             job["_red_flags"]            = s.get("red_flags", "")
             job["_apply_recommendation"] = s.get("apply_recommendation", "")
             job["_gradient"] = normalize_gradient(job)
+            job["_model"] = model # For later voting analysis
             if "Skip" in job.get("_apply_recommendation", ""): # Filter out Skip jobs early， to avoid filling the quota with low-quality listings
                 continue
             scored.append(job)
