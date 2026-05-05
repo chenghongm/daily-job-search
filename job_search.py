@@ -401,7 +401,7 @@ def score_jobs(jobs: list, model: str) -> list:
             s = score_map.get(idx + 1, {})
             job["_match_score"]          = s.get("match_score", 0)
             job["_gradient"]             = s.get("gradient", job.get("_gradient", ""))
-            job["_match_reason"]         = s.get("match_reason", "")
+            job["_match_reason"]         = s.get("technical_hook", "")
             job["_red_flags"]            = s.get("red_flags", "")
             job["_apply_recommendation"] = s.get("apply_recommendation", "")
             job["_gradient"] = normalize_gradient(job)
