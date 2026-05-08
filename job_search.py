@@ -478,15 +478,21 @@ def write_jobs_to_tab(jobs: list, tab_name: str):
     try:
         recommend_col = SHEET_HEADERS.index("Recommend") + 1
         all_values = ws.col_values(recommend_col)
-        for row_idx, val in enumerate(all_values[1:], start=2):  # skip header
+        formats = []
+        for row_idx, val in enumerate(all_values[1:], start=2):
             if val == "Maybe":
-                ws.format(f"{chr(64+recommend_col)}{row_idx}", {
-                    "backgroundColor": {"red": 1.0, "green": 0.6, "blue": 0.0}
+                formats.append({
+                    "range": f"{chr(64+recommend_col)}{row_idx}",
+                    "format": {"backgroundColor": {"red": 1.0, "green": 0.6, "blue": 0.0}}
                 })
             elif val == "Skip":
-                ws.format(f"{chr(64+recommend_col)}{row_idx}", {
-                    "backgroundColor": {"red": 0.9, "green": 0.2, "blue": 0.2}
+                formats.append({
+                    "range": f"{chr(64+recommend_col)}{row_idx}",
+                    "format": {"backgroundColor": {"red": 0.9, "green": 0.2, "blue": 0.2}}
                 })
+
+        if formats:
+            ws.batch_format(formats)
     except Exception as e:
         print(f"   Color format error (non-fatal): {e}")
 
