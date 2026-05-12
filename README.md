@@ -1,4 +1,102 @@
-# daily-job-search
+# Daily Job Search Agent
+
+Automated daily job search pipeline that fetches listings, evaluates fit across three LLMs, and logs results to Google Sheets.
+
+## How It Works
+
+Runs every weekday at 12am PST via GitHub Actions:
+1. Fetches job listings from Adzuna API based on skills profile
+2. Evaluates each listing in parallel using Claude, Gemini, and GPT
+3. Each model scores fit (0–100), recommends action (Yes/Maybe/Skip), and explains reasoning
+4. Results written to Google Sheets (separate tab per model) + email notification
+
+## Why Three Models?
+
+Beyond being a practical job search tool, running identical inputs through Claude, Gemini, and GPT simultaneously reveals how different models weigh the same criteria in its own way — useful as a lightweight research signal on cross-model judgment differences.
+
+## File Structure
+
+```
+daily-job-search/
+├── .github/workflows/daily_job_search.yml   # GitHub Actions schedule
+├── job_search.py                            # main logic
+├── resume_profile.json                      # skills profile
+├── requirements.txt
+└── README.md
+```
+
+## Setup
+
+### 1. Adzuna API (free)
+1. Register at https://developer.adzuna.com/
+2. Create an app to get your `App ID` and `App Key`
+
+### 2. Google Service Account
+1. Open [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project
+3. Enable **Google Sheets API** under APIs & Services
+4. Create a Service Account with Editor role
+5. Generate a JSON key and save the contents
+
+### 3. Google Sheet
+1. Create a new sheet at https://sheets.google.com
+2. Share it with the Service Account email (`client_email` in the JSON) with Editor access
+3. Copy the Sheet ID from the URL
+
+### 4. GitHub Secrets
+Go to repo → Settings → Secrets and variables → Actions → New repository secret
+
+| Secret | Value |
+|--------|-------|
+| `ADZUNA_APP_ID` | Adzuna App ID |
+| `ADZUNA_APP_KEY` | Adzuna App Key |
+| `ANTHROPIC_API_KEY` | Anthropic API Key |
+| `SPREADSHEET_ID` | Google Sheet ID |
+| `RESEND_API_KEY` | Resend API Key |
+| `NOTIFY_EMAIL` | Notification email address |
+| `GOOGLE_CREDENTIALS` | Full contents of Service Account JSON |
+
+### 5. Push and Run
+```bash
+git add .
+git commit -m "init daily job search agent"
+git push
+```
+
+To test manually: Actions → Daily Job Search → Run workflow
+
+## Google Sheet Schema
+
+Each model writes to its own tab.
+
+| Column | Description |
+|--------|-------------|
+| Date | Fetch date |
+| Gradient | 40% Reach / 60% Stretch / 80% Safe |
+| Score | Match score 0–100 |
+| Recommend | Yes / Maybe / Skip |
+| Job Title | Position title |
+| Company | Company name |
+| Location | Location |
+| Remote | Remote availability |
+| URL | Job listing URL |
+| Match Reason | Why this role fits |
+| Red Flags | Mismatches or concerns |
+| **Status** | Manual update: Pending / Applied / Interview / Offer / Rejected |
+| Notes | Additional notes |
+
+## Updating Your Skills Profile
+Edit `resume_profile.json` and push — takes effect on the next run.
+
+## Timezone Note
+Cron in `.github/workflows/daily_job_search.yml`:
+```
+0 18 * * 1-5   # PDT (UTC-7) = 11am
+0 19 * * 1-5   # PST (UTC-8) = 11am — use this after November DST change
+```
+
+
+# daily-job-search 
 
 每天 12am PST 自动搜职位 → Claude/Gemini/GPT 对比，评分，并写原因 → Google Sheets → marked at calendar
 
