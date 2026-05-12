@@ -1,6 +1,6 @@
 # daily-job-search
 
-每天 11am PST 自动搜职位 → Claude 评分 → Google Sheets → marked at calendar
+每天 12am PST 自动搜职位 → Claude/Gemini/GPT 对比，评分，并写原因 → Google Sheets → marked at calendar
 
 ---
 
