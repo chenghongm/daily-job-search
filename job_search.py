@@ -26,6 +26,7 @@ from googleapiclient.discovery import build
 
 # ── Config ─────────────────────────────────────────────────────
 ADZUNA_APP_ID   = os.environ["ADZUNA_APP_ID"]
+THEMUSE_API_KEY = os.environ.get("THEMUSE_API_KEY", "")
 ADZUNA_APP_KEY  = os.environ["ADZUNA_APP_KEY"]
 ANTHROPIC_KEY   = os.environ.get("ANTHROPIC_API_KEY", "")
 GEMINI_KEY      = os.environ.get("GEMINI_API_KEY", "")
@@ -116,6 +117,13 @@ def collect_all_jobs() -> list:
         if jid and jid not in seen_ids:
             seen_ids.add(jid)
             all_jobs.append(job)
+    
+    # Add TheMuse jobs
+    for job in fetch_themuse_jobs():
+        jid = job.get("id", "")
+        if jid and jid not in seen_ids:
+            seen_ids.add(jid)
+            all_jobs.append(job)
 
     return all_jobs
 
@@ -123,7 +131,7 @@ def collect_all_jobs() -> list:
 # ── Greenhouse ─────────────────────────────────────────────────
 # Well-known Bay Area / remote-friendly companies on Greenhouse
 GREENHOUSE_BOARDS = [
-    "anthropic", "openai", "stripe", "notion", "figma",
+    "anthropic", "openai", "stripe", "notion", "figma", "benchling",
     "vercel", "linear", "retool", "rippling", "brex",
     "scale", "weights-biases", "cohere", "mistral",
 ]
@@ -205,6 +213,43 @@ def fetch_lever_jobs() -> list:
     print(f"   Lever: {len(jobs)} jobs")
     return jobs
 
+# ── themuse ──────────────────────────────────────────────────────
+def fetch_themuse_jobs() -> list:
+    jobs = []
+    base_url = "https://www.themuse.com/api/public/jobs"
+    
+    for page in range(1, 3):  # 2 pages = 40 jobs
+        try:
+            params = [
+                ("api_key", THEMUSE_API_KEY),
+                ("category", "Science and Engineering"),
+                ("category", "Software Engineer"),
+                ("category", "Software Engineering"),
+                ("level", "Mid Level"),
+                ("level", "Senior Level"),
+                ("location", "San Francisco, CA"),
+                ("location", "Flexible / Remote"),
+                ("page", page),
+                ("descending", "true"),
+            ]
+            resp = requests.get(base_url, params=params, timeout=15)
+            resp.raise_for_status()
+            for j in resp.json().get("results", []):
+                jobs.append({
+                    "id": f"muse-{j.get('id')}",
+                    "title": j.get("name", ""),
+                    "company": {"display_name": j.get("company", {}).get("name", "")},
+                    "location": {"display_name": j.get("locations", [{}])[0].get("name", "")},
+                    "redirect_url": j.get("refs", {}).get("landing_page", ""),
+                    "description": j.get("contents", "")[:500],
+                    "_gradient": "60% Stretch",
+                    "_source": "TheMuse",
+                })
+        except Exception as e:
+            print(f"TheMuse error page {page}: {e}")
+    
+    print(f"   TheMuse: {len(jobs)} jobs")
+    return jobs
 
 # ── Scoring: build prompt ──────────────────────────────────────
 def build_prompt(jobs: list) -> str:
