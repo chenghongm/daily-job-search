@@ -271,7 +271,7 @@ Your goal is to evaluate if this specific candidate should apply based on high-i
 
 CANDIDATE CORE VALUE:
 - 5+ years Full Stack Developer (PHP/Laravel, React, Java, MySQL)
-- KEY ACHIEVEMENT: Optimized 12TB storage to 7TB (42% reduction) - indicates high-level data architecture skills.
+- SUMMARY: Full-stack engineer who builds AI systems, not just uses them. Production LLM pipeline with hybrid routing and hallucination mitigation. Cross-model behavioral research and local fine-tuning. Codes, understands model behavior, thinks at the system level.
 - HIGH VELOCITY: 6200+ GitHub contributions (extreme output density).
 - AI DEPTH: Built local Llama-3 fine-tuning pipelines (MLX) and AI UX tools.
 - Location: SF Bay Area / Remote only. NO relocation.
@@ -307,7 +307,7 @@ Return ONLY a JSON array. Each element:
   "index": <number>,
   "match_score": <number>,
   "gradient": "<40% Reach | 60% Stretch | 80% Safe>",
-  "technical_hook": "<1 sentence linking the candidate's specific achievement (e.g. 12TB optimization) to this JD>",
+  "technical_hook": "<1 sentence linking the candidate's specific achievement to this JD>",
   "red_flags": "<seniority/location/domain mismatch, or 'none'>",
   "apply_recommendation": "<Yes | Maybe | Skip>"
 }}
