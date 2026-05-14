@@ -5,7 +5,7 @@ Automated daily job search pipeline that fetches listings, evaluates fit across 
 ## How It Works
 
 Runs every weekday at 12am PST via GitHub Actions:
-1. Fetches job listings from Adzuna API based on skills profile
+1. Fetches job listings from Adzuna/themuse API based on skills profile
 2. Evaluates each listing in parallel using Claude, Gemini, and GPT
 3. Each model scores fit (0–100), recommends action (Yes/Maybe/Skip), and explains reasoning
 4. Results written to Google Sheets (separate tab per model) + email notification
